@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"os/user"
@@ -23,7 +24,7 @@ var (
 func init() {
 	u, err := user.Lookup("nobody")
 	if err != nil {
-		return
+		log.Fatalf("nobody user not found: %v", err)
 	}
 	if uid, err := strconv.ParseUint(u.Uid, 10, 32); err == nil {
 		nobodyUID = uint32(uid)

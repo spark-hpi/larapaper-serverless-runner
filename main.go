@@ -31,10 +31,21 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+var supportedLanguages = map[string]bool{
+	"python": true,
+	"node":   true,
+	"php":    true,
+}
+
 func handleRun(w http.ResponseWriter, r *http.Request) {
 	var req RunRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if !supportedLanguages[req.Language] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unsupported language: " + req.Language})
 		return
 	}
 

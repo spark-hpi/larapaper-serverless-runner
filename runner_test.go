@@ -80,8 +80,8 @@ func TestRunPython(t *testing.T) {
 
 func TestRunUnsupportedLanguage(t *testing.T) {
 	w := doRequest(t, RunRequest{Language: "cobol", Code: "noop", Input: json.RawMessage(`{}`), Timeout: 5})
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d", w.Code)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
 
