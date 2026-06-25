@@ -82,8 +82,9 @@ func execute(req RunRequest) (json.RawMessage, error) {
 
 	cmd := exec.CommandContext(ctx, interp, scriptPath)
 	cmd.Stdin = bytes.NewReader(req.Input)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: nobodyUID, Gid: nobodyGID},
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+	if os.Getuid() == 0 {
+		cmd.SysProcAttr.Credential = &syscall.Credential{Uid: nobodyUID, Gid: nobodyGID}
 	}
 
 	var stderr bytes.Buffer
