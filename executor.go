@@ -69,9 +69,12 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("write script: %w", err)
 	}
 
-	// Pre-create output file owned by root with 622 so nobody can write to it.
+	// Pre-create output file owned by runner with 622 so nobody can write to it.
 	if err := os.WriteFile(outputPath, []byte{}, 0622); err != nil {
 		return nil, fmt.Errorf("create output file: %w", err)
+	}
+	if err := os.Chmod(outputPath, 0622); err != nil {
+		return nil, fmt.Errorf("chmod output file: %w", err)
 	}
 
 	timeout := req.Timeout
