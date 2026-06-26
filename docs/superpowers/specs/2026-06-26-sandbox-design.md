@@ -85,7 +85,7 @@ The `nobodyUID`/`nobodyGID` package vars and the `init()` block that resolved th
 --unshare-ipc           # new IPC namespace
 --unshare-uts           # new UTS namespace (hostname isolation)
 --ro-bind /usr /usr     # interpreters + stdlib, read-only
---symlink usr/lib /lib  # Alpine musl symlink
+--ro-bind /lib /lib     # musl libc (real dir on Alpine, not a symlink)
 --proc /proc
 --dev /dev
 --tmpfs /tmp
