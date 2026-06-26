@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"testing"
 )
@@ -155,9 +154,7 @@ func TestRunNonObjectOutput(t *testing.T) {
 }
 
 func TestSubprocessRunsAsNobody(t *testing.T) {
-	if os.Getuid() != 0 {
-		t.Skip("requires root to test user isolation")
-	}
+	requireInterpreter(t, "bwrap")
 	requireInterpreter(t, "python3")
 	output := mustRun(t, RunRequest{
 		Language: "python",
@@ -166,11 +163,8 @@ func TestSubprocessRunsAsNobody(t *testing.T) {
 		Timeout:  5,
 	})
 	uid := uint32(output["uid"].(float64))
-	if uid == 0 {
-		t.Fatal("expected non-root subprocess, got uid 0")
-	}
-	if uid != nobodyUID {
-		t.Fatalf("expected uid %d (nobody), got %d", nobodyUID, uid)
+	if uid != 65534 {
+		t.Fatalf("expected uid 65534 (nobody) inside sandbox, got %d", uid)
 	}
 }
 

@@ -5,34 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
-
-var (
-	nobodyUID uint32 = 65534
-	nobodyGID uint32 = 65534
-)
-
-func init() {
-	u, err := user.Lookup("nobody")
-	if err != nil {
-		log.Fatalf("nobody user not found: %v", err)
-	}
-	if uid, err := strconv.ParseUint(u.Uid, 10, 32); err == nil {
-		nobodyUID = uint32(uid)
-	}
-	if gid, err := strconv.ParseUint(u.Gid, 10, 32); err == nil {
-		nobodyGID = uint32(gid)
-	}
-}
 
 var interpreters = map[string]string{
 	"python": "python3",
@@ -51,6 +29,30 @@ func resolveTimeout(req int) int {
 		return timeoutCap
 	}
 	return req
+}
+
+func buildBwrapArgs(tmpDir string) []string {
+	return []string{
+		"--unshare-user",
+		"--uid", "65534",
+		"--gid", "65534",
+		"--unshare-pid",
+		"--unshare-ipc",
+		"--unshare-uts",
+		"--ro-bind", "/usr", "/usr",
+		"--ro-bind", "/lib", "/lib",
+		"--ro-bind", "/bin", "/bin",
+		"--proc", "/proc",
+		"--dev", "/dev",
+		"--tmpfs", "/tmp",
+		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
+		"--ro-bind", "/etc/hosts", "/etc/hosts",
+		"--ro-bind", "/etc/ssl/certs", "/etc/ssl/certs",
+		"--ro-bind", "/etc/php83", "/etc/php83",
+		"--bind", tmpDir, tmpDir,
+		"--new-session",
+		"--",
+	}
 }
 
 func execute(req RunRequest) (json.RawMessage, error) {
@@ -76,7 +78,6 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("write script: %w", err)
 	}
 
-	// Pre-create output file owned by runner with 622 so nobody can write to it.
 	if err := os.WriteFile(outputPath, []byte{}, 0622); err != nil {
 		return nil, fmt.Errorf("create output file: %w", err)
 	}
@@ -88,11 +89,10 @@ func execute(req RunRequest) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, interp, scriptPath)
+	shellCmd := fmt.Sprintf("ulimit -v %d && exec %s %s", memLimit/1024, interp, scriptPath)
+	args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd)
+	cmd := exec.CommandContext(ctx, "bwrap", args...)
 	cmd.Stdin = bytes.NewReader(req.Input)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Credential: &syscall.Credential{Uid: nobodyUID, Gid: nobodyGID},
-	}
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
