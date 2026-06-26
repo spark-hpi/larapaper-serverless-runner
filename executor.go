@@ -48,7 +48,7 @@ func buildBwrapArgs(tmpDir string) []string {
 		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
 		"--ro-bind", "/etc/hosts", "/etc/hosts",
 		"--ro-bind", "/etc/ssl/certs", "/etc/ssl/certs",
-		"--ro-bind", "/etc/php83", "/etc/php83",
+		"--ro-bind-try", "/etc/php83", "/etc/php83",
 		"--bind", tmpDir, tmpDir,
 		"--new-session",
 		"--",
@@ -89,8 +89,8 @@ func execute(req RunRequest) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	shellCmd := fmt.Sprintf("ulimit -v %d && exec %s %s", memLimit/1024, interp, scriptPath)
-	args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd)
+	shellCmd := fmt.Sprintf("ulimit -v %d && exec \"$@\"", memLimit/1024)
+	args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd, "--", interp, scriptPath)
 	cmd := exec.CommandContext(ctx, "bwrap", args...)
 	cmd.Stdin = bytes.NewReader(req.Input)
 
