@@ -47,16 +47,11 @@ where `timeoutCap` is the parsed `TRANSFORM_TIMEOUT` value. This means requests 
 
 ## Memory Limit
 
-Applied via `RLIMIT_AS` on the bwrap process. Since rlimits are inherited across exec, the limit covers both bwrap and the interpreter it launches.
+Applied via `ulimit -v` (RLIMIT_AS, in kilobytes) inside the busybox shell wrapper before exec'ing the interpreter. `memLimit` is stored in bytes; the conversion is `memLimit/1024`.
 
 ```go
-cmd.SysProcAttr = &syscall.SysProcAttr{
-    Rlimit: []syscall.Rlimit{{
-        Type: syscall.RLIMIT_AS,
-        Cur:  memLimit,
-        Max:  memLimit,
-    }},
-}
+shellCmd := fmt.Sprintf("ulimit -v %d && exec \"$@\"", memLimit/1024)
+args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd, "--", interp, scriptPath)
 ```
 
 When the limit is exceeded the process receives SIGKILL or gets ENOMEM; it exits non-zero and surfaces as `transform exited non-zero: ...` via the existing error path. No special-casing required.
