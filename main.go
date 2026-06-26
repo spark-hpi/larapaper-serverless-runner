@@ -5,7 +5,32 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 )
+
+var (
+	timeoutCap int    = 30
+	memLimit   uint64 = 128 << 20
+)
+
+func initConfig() {
+	if v := os.Getenv("TRANSFORM_TIMEOUT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			log.Printf("invalid TRANSFORM_TIMEOUT %q, using default %d", v, timeoutCap)
+		} else {
+			timeoutCap = n
+		}
+	}
+	if v := os.Getenv("TRANSFORM_MEMORY_LIMIT"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 64)
+		if err != nil || n == 0 {
+			log.Printf("invalid TRANSFORM_MEMORY_LIMIT %q, using default %d", v, memLimit)
+		} else {
+			memLimit = n
+		}
+	}
+}
 
 type RunRequest struct {
 	Language string          `json:"language"`
@@ -15,6 +40,7 @@ type RunRequest struct {
 }
 
 func main() {
+	initConfig()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3000"

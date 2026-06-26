@@ -10,6 +10,30 @@ import (
 	"testing"
 )
 
+func TestResolveTimeout(t *testing.T) {
+	orig := timeoutCap
+	defer func() { timeoutCap = orig }()
+	timeoutCap = 10
+
+	tests := []struct {
+		req  int
+		want int
+	}{
+		{0, 10},
+		{-1, 10},
+		{11, 10},
+		{10, 10},
+		{9, 9},
+		{1, 1},
+	}
+	for _, tt := range tests {
+		got := resolveTimeout(tt.req)
+		if got != tt.want {
+			t.Errorf("resolveTimeout(%d) = %d, want %d", tt.req, got, tt.want)
+		}
+	}
+}
+
 func requireInterpreter(t *testing.T, name string) {
 	t.Helper()
 	if _, err := exec.LookPath(name); err != nil {

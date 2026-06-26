@@ -46,6 +46,13 @@ var extensions = map[string]string{
 	"php":    "php",
 }
 
+func resolveTimeout(req int) int {
+	if req <= 0 || req > timeoutCap {
+		return timeoutCap
+	}
+	return req
+}
+
 func execute(req RunRequest) (json.RawMessage, error) {
 	interp, ok := interpreters[req.Language]
 	if !ok {
@@ -77,10 +84,7 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("chmod output file: %w", err)
 	}
 
-	timeout := req.Timeout
-	if timeout <= 0 {
-		timeout = 30
-	}
+	timeout := resolveTimeout(req.Timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
