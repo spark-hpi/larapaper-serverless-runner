@@ -1,2 +1,4 @@
 transform-runner
 runner
+.envrc
+.direnv
