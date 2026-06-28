@@ -40,6 +40,20 @@ func requireInterpreter(t *testing.T, name string) {
 	}
 }
 
+// requireBwrap skips the test if bwrap is absent or the sandbox can't exec inside it.
+func requireBwrap(t *testing.T) {
+	t.Helper()
+	requireInterpreter(t, "bwrap")
+	cmd := exec.Command("bwrap",
+		"--ro-bind", "/usr", "/usr", "--dev", "/dev", "--proc", "/proc",
+		"--unshare-user", "--uid", "65534", "--gid", "65534",
+		"--", "true",
+	)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("bwrap sandbox not functional: %v", err)
+	}
+}
+
 func TestHandleHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	w := httptest.NewRecorder()
@@ -50,6 +64,7 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestRunPHP(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "php")
 	output := mustRun(t, RunRequest{
 		Language: "php",
@@ -63,6 +78,7 @@ func TestRunPHP(t *testing.T) {
 }
 
 func TestRunPHPStripsTag(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "php")
 	output := mustRun(t, RunRequest{
 		Language: "php",
@@ -76,6 +92,7 @@ func TestRunPHPStripsTag(t *testing.T) {
 }
 
 func TestRunNode(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "node")
 	output := mustRun(t, RunRequest{
 		Language: "node",
@@ -89,6 +106,7 @@ func TestRunNode(t *testing.T) {
 }
 
 func TestRunPython(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "python3")
 	output := mustRun(t, RunRequest{
 		Language: "python",
@@ -109,6 +127,7 @@ func TestRunUnsupportedLanguage(t *testing.T) {
 }
 
 func TestRunNonZeroExit(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "php")
 	w := doRequest(t, RunRequest{
 		Language: "php",
@@ -122,6 +141,7 @@ func TestRunNonZeroExit(t *testing.T) {
 }
 
 func TestRunTimeout(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "php")
 	w := doRequest(t, RunRequest{
 		Language: "php",
@@ -140,6 +160,7 @@ func TestRunTimeout(t *testing.T) {
 }
 
 func TestRunNonObjectOutput(t *testing.T) {
+	requireBwrap(t)
 	requireInterpreter(t, "php")
 	// run() returns null → harness writes "null" → not a JSON object → 422
 	w := doRequest(t, RunRequest{
