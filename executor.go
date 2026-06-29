@@ -42,7 +42,6 @@ func buildBwrapArgs(tmpDir string) []string {
 		"--ro-bind", "/usr", "/usr",
 		"--ro-bind", "/lib", "/lib",
 		"--ro-bind", "/bin", "/bin",
-		"--proc", "/proc",
 		"--dev", "/dev",
 		"--tmpfs", "/tmp",
 		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
