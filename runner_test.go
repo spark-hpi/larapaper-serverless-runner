@@ -93,7 +93,7 @@ func TestRunPHPStripsTag(t *testing.T) {
 
 func TestRunNode(t *testing.T) {
 	requireBwrap(t)
-	requireInterpreter(t, "node")
+	requireInterpreter(t, "tjs")
 	output := mustRun(t, RunRequest{
 		Language: "node",
 		Code:     `function run(input) { return { doubled: input.value * 2 }; }`,
