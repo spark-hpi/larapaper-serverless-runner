@@ -33,7 +33,6 @@ func resolveTimeout(req int) int {
 
 func buildBwrapArgs(tmpDir string) []string {
 	return []string{
-		"--unshare-user",
 		"--uid", "65534",
 		"--gid", "65534",
 		"--unshare-pid",
