@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-var interpreters = map[string]string{
-	"python": "python3",
-	"node":   "node",
-	"php":    "php",
+var interpreters = map[string][]string{
+	"python": {"python3"},
+	"node":   {"tjs", "run"},
+	"php":    {"php"},
 }
 
 var extensions = map[string]string{
@@ -42,6 +42,7 @@ func buildBwrapArgs(tmpDir string) []string {
 		"--ro-bind", "/usr", "/usr",
 		"--ro-bind", "/lib", "/lib",
 		"--ro-bind", "/bin", "/bin",
+		"--ro-bind", "/proc", "/proc",
 		"--dev", "/dev",
 		"--tmpfs", "/tmp",
 		"--ro-bind", "/etc/resolv.conf", "/etc/resolv.conf",
@@ -60,6 +61,7 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("unsupported language: %s", req.Language)
 	}
 
+
 	tmpDir, err := os.MkdirTemp("", "trmnl-")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -70,18 +72,9 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("chmod tmpdir: %w", err)
 	}
 
-	outputPath := filepath.Join(tmpDir, "output.json")
 	scriptPath := filepath.Join(tmpDir, "transform."+extensions[req.Language])
-
-	if err := os.WriteFile(scriptPath, []byte(buildHarness(req.Language, req.Code, outputPath)), 0644); err != nil {
+	if err := os.WriteFile(scriptPath, []byte(buildHarness(req.Language, req.Code)), 0644); err != nil {
 		return nil, fmt.Errorf("write script: %w", err)
-	}
-
-	if err := os.WriteFile(outputPath, []byte{}, 0622); err != nil {
-		return nil, fmt.Errorf("create output file: %w", err)
-	}
-	if err := os.Chmod(outputPath, 0622); err != nil {
-		return nil, fmt.Errorf("chmod output file: %w", err)
 	}
 
 	timeout := resolveTimeout(req.Timeout)
@@ -89,11 +82,14 @@ func execute(req RunRequest) (json.RawMessage, error) {
 	defer cancel()
 
 	shellCmd := fmt.Sprintf("ulimit -v %d && exec \"$@\"", memLimit/1024)
-	args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd, "--", interp, scriptPath)
+	args := append(buildBwrapArgs(tmpDir), "/bin/sh", "-c", shellCmd, "--")
+	args = append(args, interp...)
+	args = append(args, scriptPath)
 	cmd := exec.CommandContext(ctx, "bwrap", args...)
 	cmd.Stdin = bytes.NewReader(req.Input)
 
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
@@ -103,8 +99,8 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("transform exited non-zero: %s", strings.TrimSpace(stderr.String()))
 	}
 
-	raw, err := os.ReadFile(outputPath)
-	if err != nil || len(raw) == 0 {
+	raw := stdout.Bytes()
+	if len(raw) == 0 {
 		return nil, fmt.Errorf("transform produced no output")
 	}
 
