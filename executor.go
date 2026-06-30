@@ -72,9 +72,18 @@ func execute(req RunRequest) (json.RawMessage, error) {
 		return nil, fmt.Errorf("chmod tmpdir: %w", err)
 	}
 
-	scriptPath := filepath.Join(tmpDir, "transform."+extensions[req.Language])
-	if err := os.WriteFile(scriptPath, []byte(buildHarness(req.Language, req.Code)), 0644); err != nil {
-		return nil, fmt.Errorf("write script: %w", err)
+	codePath := filepath.Join(tmpDir, "transform."+extensions[req.Language])
+	if err := os.WriteFile(codePath, []byte(prepareCode(req.Language, req.Code)), 0644); err != nil {
+		return nil, fmt.Errorf("write code: %w", err)
+	}
+
+	harness, err := harnessContent(req.Language)
+	if err != nil {
+		return nil, fmt.Errorf("get harness: %w", err)
+	}
+	scriptPath := filepath.Join(tmpDir, "harness."+extensions[req.Language])
+	if err := os.WriteFile(scriptPath, harness, 0644); err != nil {
+		return nil, fmt.Errorf("write harness: %w", err)
 	}
 
 	timeout := resolveTimeout(req.Timeout)

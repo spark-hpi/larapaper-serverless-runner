@@ -1,7 +1,6 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-COPY go.mod .
-COPY *.go .
+COPY . /app/
 RUN go build -o runner .
 
 FROM alpine:3.21 AS txiki-builder
