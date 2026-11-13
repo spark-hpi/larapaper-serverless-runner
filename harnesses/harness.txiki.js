@@ -32,9 +32,17 @@ const concat = (parts) => {
 const input = JSON.parse(dec.decode(concat(chunks)));
 
 const dir = new URL('.', import.meta.url).pathname;
-const { run } = await import(dir + 'transform.js');
-const out = await run(input);
+const { __trmnl_entry: entry } = await import(dir + 'transform.js');
+if (typeof entry !== 'function') {
+    throw new Error('transform must define a `run(input)` function');
+}
+const out = await entry(input);
+if (out === null || typeof out !== 'object' || Array.isArray(out)) {
+    throw new Error(`run() must return an object, got ${Array.isArray(out) ? 'array' : out === null ? 'null' : typeof out}`);
+}
 
 const writer = tjs.stdout.getWriter();
 await writer.write(enc.encode(JSON.stringify(out)));
 writer.releaseLock();
+// Exit once written so leftover timers or open sockets don't run into the timeout.
+tjs.exit(0);

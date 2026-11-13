@@ -2,20 +2,62 @@ name: Build and Push Docker Image
 
 on:
   push:
-    tags: ['*']
+    # Semver without a v prefix: 1.2.3 and 1.2.3-rc1. v1.2.3 does not run this workflow.
+    tags: ['[0-9]+.[0-9]+.[0-9]+*']
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: spark-hpi/larapaper-serverless-runner
+  IMAGE_NAME: bnussbau/byos-transform-runner
 
 jobs:
-  build-and-push:
+  test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      # Unit tests only; sandbox tests skip when bwrap is not on PATH.
+      - name: Test
+        run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # default: Node.js runtime. slim: txiki.js runtime (no Intl/require), tags suffixed -slim.
+        variant: [default, slim]
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+          - variant: default
+            suffix: ''
+          - variant: slim
+            suffix: -slim
 
     steps:
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -31,14 +73,100 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # {{version}} is major.minor.patch with no v prefix.
+          # latest=auto moves `latest` only for a non-prerelease semver tag (1.2.3, not 1.2.3-rc1).
           tags: |
-            type=ref,event=tag
-            type=raw,value=latest
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          flavor: |
+            latest=auto
+            suffix=${{ matrix.suffix }},onlatest=true
 
-      - name: Build and push
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          target: ${{ matrix.variant }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          provenance: false
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.variant }}-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - variant: default
+            suffix: ''
+          - variant: slim
+            suffix: -slim
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.variant }}-*
+          merge-multiple: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # {{version}} is major.minor.patch with no v prefix.
+          # latest=auto moves `latest` only for a non-prerelease semver tag (1.2.3, not 1.2.3-rc1).
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          flavor: |
+            latest=auto
+            suffix=${{ matrix.suffix }},onlatest=true
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
