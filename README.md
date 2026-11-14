@@ -183,3 +183,6 @@ docker run -p 3000:3000 -e TRANSFORM_API_KEY=change-me \
 go test ./...
 go run .
 ```
+
+## Contributors
+This project is based on work by [spark-hpi](https://github.com/spark-hpi/larapaper-serverless-runner).
