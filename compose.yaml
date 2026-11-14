@@ -1,9 +1,29 @@
 services:
   runner:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+      # target: slim   # txiki.js runtime: smaller, but no Intl/require
     ports:
       - "3000:3000"
+    environment:
+      # Required by /run when set; send it as `Authorization: Bearer <key>`.
+      TRANSFORM_API_KEY: ${TRANSFORM_API_KEY:-}
+    # bubblewrap needs unprivileged user namespaces, which Docker's default
+    # seccomp and AppArmor profiles block.
     security_opt:
       - seccomp=unconfined
-      - no-new-privileges=false
       - apparmor=unconfined
+      - no-new-privileges:true
+      # Lets the sandbox mount a private /proc. Without it, transforms run
+      # with no /proc (most code doesn't need it).
+      # - systempaths=unconfined
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 256
+    mem_limit: 1g
+    restart: unless-stopped

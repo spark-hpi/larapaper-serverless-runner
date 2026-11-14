@@ -20,7 +20,12 @@ if spec is None or spec.loader is None:
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-output = mod.run(input)
+entry = getattr(mod, "run", None) or getattr(mod, "transform", None)
+if not callable(entry):
+    raise NameError("transform must define a `run(input)` function")
 
-os.write(stdout, json.dumps(output).encode())
+output = entry(input)
+
+# allow_nan=False: NaN/Infinity are not JSON; fail here with a clear error.
+os.write(stdout, json.dumps(output, default=str, allow_nan=False).encode())
 os.close(stdout)
